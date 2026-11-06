@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>문자 내용 관리 시스템 (SMS Copy Manager)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Excel import/export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center space-x-3 pointer-events-none">
+        <i id="toastIcon" class="fas fa-check-circle text-emerald-400 text-lg"></i>
+        <span id="toastMessage" class="text-sm font-medium">메시지가 저장되었습니다.</span>
+    </div>
+
+    <!-- Header Navigation -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-500/20">
+                        <i class="fas fa-comment-dots"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-slate-900 leading-tight">문자 DB 관리 시스템</h1>
+                        <p class="text-xs text-slate-500">바이온텍 마케팅 & 고객안내 문구 아카이브</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="downloadExcelTemplate()" class="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-xs font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition">
+                        <i class="fas fa-file-excel text-emerald-600 mr-1.5"></i> 양식 다운로드
+                    </button>
+                    <button onclick="triggerFileInput()" class="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-xs font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition">
+                        <i class="fas fa-file-upload text-blue-600 mr-1.5"></i> 엑셀 일괄 업로드
+                    </button>
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)">
+                    
+                    <button onclick="exportToExcel()" class="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-xs font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition">
+                        <i class="fas fa-file-download text-indigo-600 mr-1.5"></i> 엑셀 백업
+                    </button>
+                    <button onclick="openModal()" class="inline-flex items-center px-4 py-2 border border-transparent shadow-md text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition">
+                        <i class="fas fa-plus mr-1.5"></i> 신규 등록
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Dashboard Stats Overview -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('ALL')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>전체 문자 수</span>
+                    <i class="fas fa-database text-blue-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statTotalCount">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('바이온텍')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>바이온텍</span>
+                    <i class="fas fa-microchip text-indigo-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statBiontechCount">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('알칼리이온수기')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>알칼리이온수기</span>
+                    <i class="fas fa-glass-water text-cyan-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statAlkaliCount">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('알칼리활용법')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>알칼리활용법</span>
+                    <i class="fas fa-lightbulb text-amber-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statAlkaliUseCount">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('산성활용법')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>산성활용법</span>
+                    <i class="fas fa-hand-holding-water text-rose-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statAcidUseCount">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition cursor-pointer" onclick="filterByCategory('물과건강')">
+                <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                    <span>물과건강</span>
+                    <i class="fas fa-heart-pulse text-emerald-500"></i>
+                </div>
+                <div class="text-2xl font-bold text-slate-900" id="statWaterHealthCount">0</div>
+            </div>
+        </div>
+
+        <!-- Filter & Search Control Panel -->
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+                
+                <!-- Search Input -->
+                <div class="relative flex-1">
+                    <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="문자 내용, 작성자, 비고 검색..." oninput="handleSearch()"
+                           class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+                </div>
+
+                <!-- Action Controls -->
+                <div class="flex items-center space-x-2">
+                    <select id="sortSelect" onchange="renderList()" class="bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="latest">최신 등록순</option>
+                        <option value="oldest">오래된 등록순</option>
+                        <option value="lengthDesc">글자수 많은순</option>
+                        <option value="lengthAsc">글자수 적은순</option>
+                    </select>
+
+                    <div class="border-l border-slate-200 h-6 mx-1"></div>
+
+                    <!-- View Toggle buttons -->
+                    <button id="viewCardBtn" onclick="setViewMode('card')" class="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition" title="카드형으로 보기">
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button id="viewTableBtn" onclick="setViewMode('table')" class="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition" title="테이블형으로 보기">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category Chips -->
+            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100" id="categoryChips">
+                <!-- Dynamically populated categories -->
+            </div>
+        </div>
+
+        <!-- Main Items View Header -->
+        <div class="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+            <div>총 <span id="filteredCount" class="text-blue-600 font-bold">0</span>건의 문자가 검색되었습니다.</div>
+            <div>* 문자 복사 아이콘을 누르면 즉시 클립보드에 복사됩니다.</div>
+        </div>
+
+        <!-- Content Container (Card or Table) -->
+        <div id="contentContainer">
+            <!-- Rendered by JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="hidden bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center text-2xl">
+                <i class="fas fa-folder-open"></i>
+            </div>
+            <h3 class="text-base font-semibold text-slate-800 mb-1">등록된 문자가 없습니다</h3>
+            <p class="text-xs text-slate-500 mb-4">새로운 문자를 등록하거나 엑셀 파일로 일괄 업로드해보세요.</p>
+            <button onclick="openModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow transition">
+                <i class="fas fa-plus mr-1.5"></i> 문구 신규 등록
+            </button>
+        </div>
+
+    </main>
+
+    <!-- Modal Form (Create / Edit) -->
+    <div id="itemModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden transform scale-95 transition-transform duration-200" id="modalCard">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                <h3 class="text-base font-bold text-slate-800" id="modalTitle">신규 문자 등록</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/50 transition">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Form -->
+            <form id="msgForm" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="editId">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Category -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">분류 <span class="text-rose-500">*</span></label>
+                        <select id="formCategory" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- Populated JS -->
+                        </select>
+                    </div>
+
+                    <!-- Author -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">작성자 <span class="text-rose-500">*</span></label>
+                        <input type="text" id="formAuthor" required placeholder="작성자 이름" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Date -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">작성일자 <span class="text-rose-500">*</span></label>
+                    <input type="date" id="formDate" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Content & Live Count -->
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label class="block text-xs font-bold text-slate-700">문자 내용 <span class="text-rose-500">*</span></label>
+                        <span class="text-xs text-slate-500">
+                            <span id="liveCharCount" class="font-bold text-blue-600">0</span> 자
+                            <span class="text-slate-400 font-normal" id="smsTypeHint">(SMS 80자 이내 / LMS 80자 초과)</span>
+                        </span>
+                    </div>
+                    <textarea id="formContent" required rows="5" placeholder="고객에게 발송할 문자 내용을 입력하세요..." oninput="updateLiveCount()"
+                              class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"></textarea>
+                </div>
+
+                <!-- Notes / Remarks -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5">비고 (참고사항)</label>
+                    <input type="text" id="formRemarks" placeholder="타겟 고객, 발송용도 등 추가 메모" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Modal Footer Actions -->
+                <div class="pt-3 border-t border-slate-100 flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 transition">
+                        취소
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow transition">
+                        저장하기
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & STATE ---
+        const CATEGORIES = [
+            '바이온텍', 
+            '알칼리이온수기', 
+            '알칼리활용법', 
+            '산성활용법', 
+            '물과건강', 
+            '건강과 식품', 
+            'CEO관계', 
+            '회사 히스토리관련', 
+            '기타'
+        ];
+
+        // Sample Seed Data
+        const SAMPLE_DATA = [
+            {
+                id: '1',
+                category: '알칼리이온수기',
+                content: '[바이온텍] 고객님, 매일 마시는 물 하나로 시작하는 건강한 변화! 알칼리이온수기는 위장 증상 개선에 도움을 주는 식약처 인증 의료기기입니다. 무료 체험 상담을 신청해보세요.',
+                author: '홍길동',
+                date: '2026-11-01',
+                remarks: '신규 고객 유치용 단문/장문 SMS'
+            },
+            {
+                id: '2',
+                category: '알칼리활용법',
+                content: '알칼리이온수 200% 활용 꿀팁! 밥을 지을 때 알칼리수를 사용하면 윤기가 흐르고 더욱 찰진 밥맛을 느끼실 수 있습니다. 국물 요리에도 깊은 맛을 냅니다.',
+                author: '김마케터',
+                date: '2026-11-03',
+                remarks: '기존 고객 정보제공용 모바일 메시지'
+            },
+            {
+                id: '3',
+                category: '산성활용법',
+                content: '알칼리이온수기에서 나오는 산성수! 버리지 마세요. 세안 시 마무리 단계에서 산성수를 사용하시면 피부 수렴 작용 및 깔끔한 피부 유지에 도움을 줍니다.',
+                author: '이건강',
+                date: '2026-11-04',
+                remarks: '생활 꿀팁 가이드 시리즈'
+            },
+            {
+                id: '4',
+                category: 'CEO관계',
+                content: '[대표이사 감사 편지] 바이온텍을 30년간 사랑해주신 고객 여러분께 감사드립니다. 인류의 건강한 삶에 이바지하겠다는 첫 마음을 잊지 않겠습니다.',
+                author: '홍보팀',
+                date: '2026-10-25',
+                remarks: '창립기념일 이벤트 발송용'
+            }
+        ];
+
+        let messages = [];
+        let selectedCategory = 'ALL';
+        let viewMode = 'card'; // 'card' or 'table'
+
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadInitialData();
+            setupCategoryChips();
+            setupCategoryDropdown();
+            renderList();
+            updateStats();
+        });
+
+        function loadInitialData() {
+            const saved = localStorage.getItem('biontech_msg_db');
+            if (saved) {
+                try {
+                    messages = JSON.parse(saved);
+                } catch (e) {
+                    messages = SAMPLE_DATA;
+                }
+            } else {
+                messages = SAMPLE_DATA;
+                saveToLocalStorage();
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('biontech_msg_db', JSON.stringify(messages));
+        }
+
+        // --- RENDER UI ---
+        function setupCategoryChips() {
+            const container = document.getElementById('categoryChips');
+            
+            let html = `
+                <button onclick="filterByCategory('ALL')" class="chip-btn px-3 py-1 rounded-full text-xs font-medium transition ${selectedCategory === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                    전체 보기
+                </button>
+            `;
+
+            CATEGORIES.forEach(cat => {
+                const isActive = selectedCategory === cat;
+                html += `
+                    <button onclick="filterByCategory('${cat}')" class="chip-btn px-3 py-1 rounded-full text-xs font-medium transition ${isActive ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                        ${cat}
+                    </button>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function setupCategoryDropdown() {
+            const select = document.getElementById('formCategory');
+            select.innerHTML = CATEGORIES.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+        }
+
+        function filterByCategory(cat) {
+            selectedCategory = cat;
+            setupCategoryChips();
+            renderList();
+        }
+
+        function getCategoryBadgeColor(cat) {
+            switch(cat) {
+                case '바이온텍': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                case '알칼리이온수기': return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+                case '알칼리활용법': return 'bg-amber-50 text-amber-700 border-amber-200';
+                case '산성활용법': return 'bg-rose-50 text-rose-700 border-rose-200';
+                case '물과건강': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                case '건강과 식품': return 'bg-teal-50 text-teal-700 border-teal-200';
+                case 'CEO관계': return 'bg-purple-50 text-purple-700 border-purple-200';
+                case '회사 히스토리관련': return 'bg-blue-50 text-blue-700 border-blue-200';
+                default: return 'bg-slate-100 text-slate-700 border-slate-200';
+            }
+        }
+
+        function getFilteredAndSortedData() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            const sortBy = document.getElementById('sortSelect').value;
+
+            return messages.filter(item => {
+                const matchCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
+                const matchSearch = !query || 
+                    item.content.toLowerCase().includes(query) || 
+                    item.author.toLowerCase().includes(query) || 
+                    (item.remarks && item.remarks.toLowerCase().includes(query));
+                return matchCategory && matchSearch;
+            }).sort((a, b) => {
+                if (sortBy === 'latest') return new Date(b.date) - new Date(a.date);
+                if (sortBy === 'oldest') return new Date(a.date) - new Date(b.date);
+                if (sortBy === 'lengthDesc') return b.content.length - a.content.length;
+                if (sortBy === 'lengthAsc') return a.content.length - b.content.length;
+                return 0;
+            });
+        }
+
+        function renderList() {
+            const data = getFilteredAndSortedData();
+            const container = document.getElementById('contentContainer');
+            const emptyState = document.getElementById('emptyState');
+            document.getElementById('filteredCount').innerText = data.length;
+
+            if (data.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            if (viewMode === 'card') {
+                renderCardView(data, container);
+            } else {
+                renderTableView(data, container);
+            }
+
+            updateStats();
+        }
+
+        function renderCardView(data, container) {
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+            
+            data.forEach(item => {
+                const charCount = item.content.length;
+                const badgeColor = getCategoryBadgeColor(item.category);
+                const isSms = charCount <= 80;
+
+                html += `
+                    <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+                        <div>
+                            <!-- Header -->
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="px-2.5 py-1 rounded-md text-xs font-semibold border ${badgeColor}">
+                                    ${escapeHtml(item.category)}
+                                </span>
+                                <span class="text-xs font-medium ${isSms ? 'text-emerald-600 bg-emerald-50' : 'text-blue-600 bg-blue-50'} px-2 py-0.5 rounded">
+                                    ${charCount}자 (${isSms ? 'SMS' : 'LMS'})
+                                </span>
+                            </div>
+
+                            <!-- Text Content -->
+                            <div class="relative bg-slate-50 border border-slate-100 rounded-lg p-3.5 mb-4 group-hover:bg-blue-50/30 transition">
+                                <p class="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-sans select-all">${escapeHtml(item.content)}</p>
+                            </div>
+                        </div>
+
+                        <!-- Footer Details -->
+                        <div>
+                            ${item.remarks ? `
+                                <div class="text-xs text-slate-500 mb-3 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-1.5 flex items-start space-x-1">
+                                    <i class="fas fa-info-circle text-amber-500 mt-0.5 mr-1 flex-shrink-0"></i>
+                                    <span class="truncate">${escapeHtml(item.remarks)}</span>
+                                </div>
+                            ` : ''}
+
+                            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                                <div class="flex items-center space-x-2">
+                                    <span><i class="far fa-user mr-1"></i>${escapeHtml(item.author)}</span>
+                                    <span>•</span>
+                                    <span>${escapeHtml(item.date)}</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <button onclick="copyToClipboard('${escapeJsString(item.content)}')" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded transition" title="문자 복사">
+                                        <i class="far fa-copy text-sm"></i>
+                                    </button>
+                                    <button onclick="editItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition" title="수정">
+                                        <i class="far fa-edit text-sm"></i>
+                                    </button>
+                                    <button onclick="deleteItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition" title="삭제">
+                                        <i class="far fa-trash-alt text-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderTableView(data, container) {
+            let html = `
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                                    <th class="py-3 px-4 w-32">분류</th>
+                                    <th class="py-3 px-4">문자 내용</th>
+                                    <th class="py-3 px-4 w-24 text-center">글자수</th>
+                                    <th class="py-3 px-4 w-24">작성자</th>
+                                    <th class="py-3 px-4 w-28">작성일자</th>
+                                    <th class="py-3 px-4 w-40">비고</th>
+                                    <th class="py-3 px-4 w-28 text-center">작업</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+            `;
+
+            data.forEach(item => {
+                const charCount = item.content.length;
+                const badgeColor = getCategoryBadgeColor(item.category);
+
+                html += `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-3.5 px-4">
+                            <span class="px-2 py-0.5 rounded text-xs font-medium border ${badgeColor}">
+                                ${escapeHtml(item.category)}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 font-sans text-slate-800 max-w-md">
+                            <p class="line-clamp-2 leading-relaxed whitespace-pre-wrap">${escapeHtml(item.content)}</p>
+                        </td>
+                        <td class="py-3.5 px-4 text-center font-medium text-slate-600">
+                            ${charCount}자
+                        </td>
+                        <td class="py-3.5 px-4 text-slate-600">${escapeHtml(item.author)}</td>
+                        <td class="py-3.5 px-4 text-slate-500">${escapeHtml(item.date)}</td>
+                        <td class="py-3.5 px-4 text-slate-500 truncate max-w-xs">${escapeHtml(item.remarks || '-')}</td>
+                        <td class="py-3.5 px-4 text-center">
+                            <div class="flex items-center justify-center space-x-1">
+                                <button onclick="copyToClipboard('${escapeJsString(item.content)}')" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded transition" title="문자 복사">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                                <button onclick="editItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition" title="수정">
+                                    <i class="far fa-edit"></i>
+                                </button>
+                                <button onclick="deleteItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded transition" title="삭제">
+                                    <i class="far fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            const cardBtn = document.getElementById('viewCardBtn');
+            const tableBtn = document.getElementById('viewTableBtn');
+
+            if (mode === 'card') {
+                cardBtn.className = 'p-2 text-blue-600 bg-blue-50 rounded-lg transition';
+                tableBtn.className = 'p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition';
+            } else {
+                tableBtn.className = 'p-2 text-blue-600 bg-blue-50 rounded-lg transition';
+                cardBtn.className = 'p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition';
+            }
+            renderList();
+        }
+
+        function updateStats() {
+            document.getElementById('statTotalCount').innerText = messages.length;
+            document.getElementById('statBiontechCount').innerText = messages.filter(m => m.category === '바이온텍').length;
+            document.getElementById('statAlkaliCount').innerText = messages.filter(m => m.category === '알칼리이온수기').length;
+            document.getElementById('statAlkaliUseCount').innerText = messages.filter(m => m.category === '알칼리활용법').length;
+            document.getElementById('statAcidUseCount').innerText = messages.filter(m => m.category === '산성활용법').length;
+            document.getElementById('statWaterHealthCount').innerText = messages.filter(m => m.category === '물과건강').length;
+        }
+
+        // --- FORM & MODAL ACTIONS ---
+        function openModal(editId = null) {
+            const modal = document.getElementById('itemModal');
+            const modalCard = document.getElementById('modalCard');
+            const title = document.getElementById('modalTitle');
+            const form = document.getElementById('msgForm');
+
+            form.reset();
+            document.getElementById('editId').value = '';
+
+            if (editId) {
+                const item = messages.find(m => m.id === editId);
+                if (item) {
+                    title.innerText = '문자 내용 수정';
+                    document.getElementById('editId').value = item.id;
+                    document.getElementById('formCategory').value = item.category;
+                    document.getElementById('formAuthor').value = item.author;
+                    document.getElementById('formDate').value = item.date;
+                    document.getElementById('formContent').value = item.content;
+                    document.getElementById('formRemarks').value = item.remarks || '';
+                }
+            } else {
+                title.innerText = '신규 문자 등록';
+                document.getElementById('formDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('formAuthor').value = '관리자';
+            }
+
+            updateLiveCount();
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalCard.classList.remove('scale-95');
+                modalCard.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('itemModal');
+            const modalCard = document.getElementById('modalCard');
+
+            modalCard.classList.remove('scale-100');
+            modalCard.classList.add('scale-95');
+            modal.classList.add('opacity-0');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function updateLiveCount() {
+            const content = document.getElementById('formContent').value;
+            const count = content.length;
+            document.getElementById('liveCharCount').innerText = count;
+            
+            const hint = document.getElementById('smsTypeHint');
+            if (count > 80) {
+                hint.innerText = '(LMS 장문)';
+                hint.className = 'text-blue-600 font-semibold';
+            } else {
+                hint.innerText = '(SMS 단문)';
+                hint.className = 'text-emerald-600 font-semibold';
+            }
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const editId = document.getElementById('editId').value;
+            const category = document.getElementById('formCategory').value;
+            const author = document.getElementById('formAuthor').value.trim();
+            const date = document.getElementById('formDate').value;
+            const content = document.getElementById('formContent').value.trim();
+            const remarks = document.getElementById('formRemarks').value.trim();
+
+            if (!content) {
+                showToast('문자 내용을 입력해주세요.', 'error');
+                return;
+            }
+
+            if (editId) {
+                // Update
+                const index = messages.findIndex(m => m.id === editId);
+                if (index !== -1) {
+                    messages[index] = { ...messages[index], category, author, date, content, remarks };
+                    showToast('성공적으로 수정되었습니다.');
+                }
+            } else {
+                // Create
+                const newItem = {
+                    id: Date.now().toString(),
+                    category,
+                    author,
+                    date,
+                    content,
+                    remarks
+                };
+                messages.unshift(newItem);
+                showToast('새 문구가 등록되었습니다.');
+            }
+
+            saveToLocalStorage();
+            renderList();
+            closeModal();
+        }
+
+        function editItem(id) {
+            openModal(id);
+        }
+
+        function deleteItem(id) {
+            if (confirm('해당 문항을 삭제하시겠습니까?')) {
+                messages = messages.filter(m => m.id !== id);
+                saveToLocalStorage();
+                renderList();
+                showToast('삭제되었습니다.');
+            }
+        }
+
+        function handleSearch() {
+            renderList();
+        }
+
+        // --- CLIPBOARD COPY ---
+        function copyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast('문자 내용이 클립보드에 복사되었습니다!');
+            } catch (err) {
+                showToast('복사에 실패하였습니다.', 'error');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        // --- EXCEL IMPORT / EXPORT ---
+        function triggerFileInput() {
+            document.getElementById('excelFileInput').click();
+        }
+
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonData.length === 0) {
+                        showToast('엑셀 파일에 데이터가 없습니다.', 'error');
+                        return;
+                    }
+
+                    let addedCount = 0;
+                    jsonData.forEach(row => {
+                        // Support various key names for flexibility
+                        const category = row['분류'] || row['Category'] || '기타';
+                        const content = row['문자내용'] || row['문자 내용'] || row['Content'] || '';
+                        const author = row['작성자'] || row['Author'] || '일괄등록';
+                        const date = row['작성일자'] || row['작성일'] || row['Date'] || new Date().toISOString().split('T')[0];
+                        const remarks = row['비고'] || row['Remarks'] || '';
+
+                        if (content.trim()) {
+                            messages.unshift({
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+                                category: CATEGORIES.includes(category) ? category : '기타',
+                                content: content.toString().trim(),
+                                author: author.toString().trim(),
+                                date: date.toString().trim(),
+                                remarks: remarks.toString().trim()
+                            });
+                            addedCount++;
+                        }
+                    });
+
+                    saveToLocalStorage();
+                    renderList();
+                    showToast(`총 ${addedCount}건의 문자가 성공적으로 등록되었습니다.`);
+                } catch (err) {
+                    console.error(err);
+                    showToast('엑셀 파일 읽기 중 오류가 발생했습니다.', 'error');
+                } finally {
+                    event.target.value = ''; // Reset input
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function exportToExcel() {
+            if (messages.length === 0) {
+                showToast('다운로드할 데이터가 없습니다.', 'error');
+                return;
+            }
+
+            const excelData = messages.map(item => ({
+                '분류': item.category,
+                '문자내용': item.content,
+                '글자수': item.content.length,
+                '작성자': item.author,
+                '작성일자': item.date,
+                '비고': item.remarks || ''
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            
+            // Adjust column widths
+            worksheet['!cols'] = [
+                { wch: 15 }, // 분류
+                { wch: 60 }, // 문자내용
+                { wch: 10 }, // 글자수
+                { wch: 12 }, // 작성자
+                { wch: 12 }, // 작성일자
+                { wch: 25 }  // 비고
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, '문자내용_목록');
+
+            const today = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `바이온텍_문자내용_DB_${today}.xlsx`);
+            showToast('엑셀 파일 백업이 시작되었습니다.');
+        }
+
+        function downloadExcelTemplate() {
+            const templateData = [
+                {
+                    '분류': '알칼리이온수기',
+                    '문자내용': '예시: 바이온텍 알칼리 이온수기 정기 점검 안내 문자입니다.',
+                    '작성자': '홍길동',
+                    '작성일자': new Date().toISOString().split('T')[0],
+                    '비고': '샘플데이터 (작성 시 이 행은 삭제해주세요)'
+                },
+                {
+                    '분류': '물과건강',
+                    '문자내용': '예시: 하루 8잔 알칼리수로 일상의 활력을 채우세요.',
+                    '작성자': '김철수',
+                    '작성일자': new Date().toISOString().split('T')[0],
+                    '비고': '분류는 지정된 카테고리명을 사용해주세요'
+                }
+            ];
+
+            const worksheet = XLSX.utils.json_to_sheet(templateData);
+            worksheet['!cols'] = [
+                { wch: 18 },
+                { wch: 60 },
+                { wch: 12 },
+                { wch: 14 },
+                { wch: 30 }
+            ];
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, '업로드양식');
+
+            XLSX.writeFile(workbook, '문자_일괄업로드_양식.xlsx');
+            showToast('업로드 양식 다운로드가 시작되었습니다.');
+        }
+
+        // --- UTILS & HELPERS ---
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.innerText = msg;
+
+            if (type === 'error') {
+                toastIcon.className = 'fas fa-exclamation-circle text-rose-400 text-lg';
+            } else {
+                toastIcon.className = 'fas fa-check-circle text-emerald-400 text-lg';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function escapeJsString(str) {
+            if (!str) return '';
+            return str
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r');
+        }
+    </script>
+</body>
+</html>
